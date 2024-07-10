@@ -1,0 +1,192 @@
+package main
+
+import (
+	"image/color"
+	"log"
+	"math/rand"
+
+	e "github.com/hajimehoshi/ebiten/v2"
+)
+
+type Snake struct {
+	Image *e.Image
+	X     int
+	Y     int
+
+	Width  int
+	Height int
+
+	StepSize int
+}
+
+type Eat struct {
+	Image *e.Image
+
+	X int
+	Y int
+
+	Width  int
+	Height int
+}
+
+type Window struct {
+	// ширина
+	Height int
+	// высота
+	Width int
+}
+
+type Game struct {
+	snake     []*Snake
+	snakeHead *Snake
+	window    Window
+	eat       Eat
+}
+
+func (g *Game) Update() error {
+	// borders
+	if g.snakeHead.Y <= 0 {
+		g.snakeHead.Y = 0
+	}
+
+	if g.snakeHead.X <= 0 {
+		g.snakeHead.X = 0
+	}
+
+	if g.snakeHead.Y >= g.window.Height-g.snakeHead.Height {
+		g.snakeHead.Y = g.window.Height - g.snakeHead.Height
+	}
+
+	if g.snakeHead.X >= g.window.Width-g.snakeHead.Width {
+		g.snakeHead.X = g.window.Width - g.snakeHead.Width
+	}
+	// borders
+
+	if checkIntersection(g.snakeHead.X, g.snakeHead.Y, g.snakeHead.Width, g.snakeHead.Height, g.eat.X, g.eat.Y, g.eat.Width, g.eat.Height) {
+		g.eat.X, g.eat.Y = g.randomLocation()
+		g.NewBlock()
+	}
+
+	// control
+	if e.IsKeyPressed(e.KeyRight) {
+		for _, snake := range g.snake {
+			snake.X += snake.StepSize
+		}
+		// g.snakeHead.X += g.snakeHead.StepSize
+		return nil
+	}
+
+	if e.IsKeyPressed(e.KeyLeft) {
+		// g.snakeHead.X -= g.snakeHead.StepSize
+		for _, snake := range g.snake {
+			snake.X -= snake.StepSize
+		}
+		return nil
+	}
+
+	if e.IsKeyPressed(e.KeyUp) {
+		// g.snakeHead.Y -= g.snakeHead.StepSize
+		for _, snake := range g.snake {
+			snake.Y -= snake.StepSize
+		}
+		return nil
+	}
+
+	if e.IsKeyPressed(e.KeyDown) {
+		// g.snakeHead.Y += g.snakeHead.StepSize
+		for _, snake := range g.snake {
+			snake.Y += snake.StepSize
+		}
+		return nil
+	}
+	// control
+
+	return nil
+}
+
+func checkIntersection(x1, y1, w1, h1, x2, y2, w2, h2 int) bool {
+	return x1 < x2+w2 && x1+w1 > x2 && y1 < y2+h2 && y1+h1 > y2
+}
+
+func (g *Game) randomLocation() (int, int) {
+	for {
+		resX := rand.Intn(g.window.Width-g.eat.Width)
+		resY := rand.Intn(g.window.Height-g.eat.Height)
+		for _, snake := range g.snake {
+			if !checkIntersection(resX, resY, g.eat.Width, g.eat.Height, snake.X, snake.Y, snake.Width, snake.Height) {
+				return resX, resY
+			}
+			break	
+		}
+	}
+}
+
+func (g *Game) Draw(screen *e.Image) {
+	for _, snake := range g.snake {
+		snakeGeoM := e.GeoM{}
+		snakeGeoM.Translate(float64(snake.X), float64(snake.Y))
+		screen.DrawImage(snake.Image, &e.DrawImageOptions{GeoM: snakeGeoM})
+	}
+
+	eatGeoM := e.GeoM{}
+	eatGeoM.Translate(float64(g.eat.X), float64(g.eat.Y))
+	screen.DrawImage(g.eat.Image, &e.DrawImageOptions{GeoM: eatGeoM})
+}
+
+func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	return g.window.Width, g.window.Height
+}
+
+func (g *Game) NewBlock() error {
+	newBlock := &Snake{}
+	newBlock.Width = 20
+	newBlock.Height = 20
+
+	lastBlock := g.snake[len(g.snake)-1]
+
+	newBlock.X = lastBlock.X+10
+	// newBlock.Y = lastBlock.Y+10
+	newBlock.StepSize = 5
+
+	snakeIMG := e.NewImage(newBlock.Width, newBlock.Width)
+	snakeIMG.Fill(color.RGBA{255, 10, 10, 1})
+	newBlock.Image = snakeIMG
+
+	g.snake = append(g.snake, newBlock) 
+
+	return nil
+}
+
+func main() {
+
+	game := &Game{}
+	game.window.Width = 640
+	game.window.Height = 480
+
+	game.snake = []*Snake{}
+	game.snakeHead = &Snake{}
+	game.snakeHead.Width = 20
+	game.snakeHead.Height = 20
+	game.snakeHead.StepSize = 5
+	game.snake = append(game.snake, game.snakeHead)
+
+	game.eat.Width = 20
+	game.eat.Height = 20
+	game.eat.X = 20
+	game.eat.Y = 20
+
+	eatImage := e.NewImage(game.eat.Height, game.eat.Width)
+	eatImage.Fill(color.RGBA{38, 10, 255, 1})
+	game.eat.Image = eatImage
+
+	snakeIMG := e.NewImage(game.snakeHead.Width, game.snakeHead.Width)
+	snakeIMG.Fill(color.RGBA{255, 10, 10, 1})
+	game.snakeHead.Image = snakeIMG
+
+	e.SetWindowSize(game.window.Width, game.window.Height)
+	e.SetWindowTitle("Your game's title")
+
+	if err := e.RunGame(game); err != nil {
+		log.Fatal(err)
+	}
+}
