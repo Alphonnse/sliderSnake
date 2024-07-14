@@ -4,7 +4,6 @@ import (
 	"image/color"
 	"log"
 	"math/rand"
-	"time"
 
 	e "github.com/hajimehoshi/ebiten/v2"
 	eu "github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -49,9 +48,6 @@ type Game struct {
 	snake  []Snake
 	eat    Eat
 
-	lastUpdate     time.Time
-	updateInterval time.Duration
-
 	gameover Gameover
 }
 
@@ -60,12 +56,6 @@ func (g *Game) Update() error {
 	if g.gameover.isover {
 		return nil
 	}
-
-	now := time.Now()
-	if now.Sub(g.lastUpdate) < g.updateInterval {
-		return nil
-	}
-	g.lastUpdate = now
 
 	// Borders
 	if g.snake[0].y <= 0 || g.snake[0].x <= 0 ||
@@ -95,13 +85,13 @@ func (g *Game) Update() error {
 
 	switch g.snake[0].direction {
 	case "right":
-		g.snake[0].x += 10
+		g.snake[0].x += 7
 	case "up":
-		g.snake[0].y -= 10
+		g.snake[0].y -= 7
 	case "down":
-		g.snake[0].y += 10
+		g.snake[0].y += 7
 	case "left":
-		g.snake[0].x -= 10
+		g.snake[0].x -= 7
 	}
 
 	if checkIntersection(g.eat.x, g.eat.y, g.eat.length, g.eat.length, g.snake[0].x, g.snake[0].y, g.snake[0].length, g.snake[0].length) {
@@ -193,7 +183,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 func (game *Game) init() {
 	game.window.Width = 1400
 	game.window.Height = 900
-	game.updateInterval = 15 * time.Millisecond
+	// game.updateInterval = 15 * time.Millisecond
 
 	snake := Snake{}
 	snake.length = 20
