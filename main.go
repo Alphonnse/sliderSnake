@@ -4,8 +4,10 @@ import (
 	"image/color"
 	"log"
 	"math/rand"
+	"time"
 
 	e "github.com/hajimehoshi/ebiten/v2"
+	eu "github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type Snake struct {
@@ -14,7 +16,7 @@ type Snake struct {
 	x int
 	y int
 
-	lenght int
+	length int
 
 	head bool
 	tail bool
@@ -28,14 +30,18 @@ type Eat struct {
 	x int
 	y int
 
-	lenght int
+	length int
+}
+
+type Gameover struct {
+	image *e.Image
+
+	isover bool
 }
 
 type Window struct {
-	// ширина
 	Height int
-	// высота
-	Width int
+	Width  int
 }
 
 type Game struct {
@@ -43,74 +49,62 @@ type Game struct {
 	snake  []Snake
 	eat    Eat
 
-	rememberX int
-	rememberY int
+	lastUpdate     time.Time
+	updateInterval time.Duration
+
+	gameover Gameover
 }
 
 func (g *Game) Update() error {
-	// borders
-	if g.snake[0].y <= 0 {
-		// g.snake[0].y = 0
-		log.Fatal("bye")
+
+	if g.gameover.isover {
+		return nil
 	}
 
-	if g.snake[0].x <= 0 {
-		log.Fatal("bye")
-		// g.snake[0].x = 0
+	now := time.Now()
+	if now.Sub(g.lastUpdate) < g.updateInterval {
+		return nil
 	}
+	g.lastUpdate = now
 
-	if g.snake[0].y >= g.window.Height-g.snake[0].lenght {
-		log.Fatal("bye")
-		// g.snake[0].y = g.window.Height - g.snake[0].lenght
+	// Borders
+	if g.snake[0].y <= 0 || g.snake[0].x <= 0 ||
+		g.snake[0].y >= g.window.Height-g.snake[0].length ||
+		g.snake[0].x >= g.window.Width-g.snake[0].length {
+		g.gameover.isover = true
 	}
-
-	if g.snake[0].x >= g.window.Width-g.snake[0].lenght {
-		log.Fatal("bye")
-		// g.snake[0].x = g.window.Width - g.snake[0].lenght
-	}
-	// borders
 
 	if e.IsKeyPressed(e.KeyRight) && g.snake[0].direction != "left" && g.snake[0].direction != "right" {
 		g.snake[0].direction = "right"
-		g.rememberX = g.snake[0].x
-		g.rememberY = g.snake[0].y
 	}
 	if e.IsKeyPressed(e.KeyUp) && g.snake[0].direction != "down" && g.snake[0].direction != "up" {
 		g.snake[0].direction = "up"
-		g.rememberX = g.snake[0].x
-		g.rememberY = g.snake[0].y
 	}
 	if e.IsKeyPressed(e.KeyDown) && g.snake[0].direction != "up" && g.snake[0].direction != "down" {
 		g.snake[0].direction = "down"
-		g.rememberX = g.snake[0].x
-		g.rememberY = g.snake[0].y
 	}
 	if e.IsKeyPressed(e.KeyLeft) && g.snake[0].direction != "right" && g.snake[0].direction != "left" {
 		g.snake[0].direction = "left"
-		g.rememberX = g.snake[0].x
-		g.rememberY = g.snake[0].y
 	}
 
-	for i := range g.snake {
-		if g.snake[i].x == g.rememberX && g.snake[i].y == g.rememberY {
-			g.snake[i].direction = g.snake[0].direction
-		}
+	// Update positions of snake segments
+	for i := len(g.snake) - 1; i > 0; i-- {
+		g.snake[i].x = g.snake[i-1].x
+		g.snake[i].y = g.snake[i-1].y
 	}
 
-	for i := range g.snake {
-		switch g.snake[i].direction {
-		case "right":
-			g.snake[i].x += 10
-		case "up":
-			g.snake[i].y -= 10
-		case "down":
-			g.snake[i].y += 10
-		case "left":
-			g.snake[i].x -= 10
-		}
+	switch g.snake[0].direction {
+	case "right":
+		g.snake[0].x += 10
+	case "up":
+		g.snake[0].y -= 10
+	case "down":
+		g.snake[0].y += 10
+	case "left":
+		g.snake[0].x -= 10
 	}
 
-	if checkIntersection(g.eat.x, g.eat.y, g.eat.lenght, g.eat.lenght, g.snake[0].x, g.snake[0].y, g.snake[0].lenght, g.snake[0].lenght) {
+	if checkIntersection(g.eat.x, g.eat.y, g.eat.length, g.eat.length, g.snake[0].x, g.snake[0].y, g.snake[0].length, g.snake[0].length) {
 		g.eat.x, g.eat.y = g.genEat()
 		g.grow()
 	}
@@ -120,52 +114,51 @@ func (g *Game) Update() error {
 
 func (g *Game) genEat() (int, int) {
 	needed := false
-	var eatX int
-	var eatY int
+	var eatX, eatY int
 	for !needed {
 		eatX = rand.Intn(g.window.Width)
 		eatY = rand.Intn(g.window.Height)
+		needed = true
 		for i := range g.snake {
 			if eatX == g.snake[i].x && eatY == g.snake[i].y {
+				needed = false
 				break
 			}
 		}
-		needed = true
 	}
 	return eatX, eatY
 }
 
 func (g *Game) grow() {
 	snake := Snake{}
-	snake.lenght = 20
+	snake.length = 20
 	snake.head = false
 	snake.tail = true
 
 	for i := range g.snake {
 		if g.snake[i].tail {
-			if g.snake[i].direction == "right" {
-				snake.x = g.snake[i].x - snake.lenght
+			switch g.snake[i].direction {
+			case "right":
+				snake.x = g.snake[i].x - snake.length
 				snake.y = g.snake[i].y
-			}
-			if g.snake[i].direction == "left" {
-				snake.x = g.snake[i].x + snake.lenght
+			case "left":
+				snake.x = g.snake[i].x + snake.length
 				snake.y = g.snake[i].y
-			}
-			if g.snake[i].direction == "up" {
+			case "up":
 				snake.x = g.snake[i].x
-				snake.y = g.snake[i].y + snake.lenght
-			}
-			if g.snake[i].direction == "down" {
+				snake.y = g.snake[i].y + snake.length
+			case "down":
 				snake.x = g.snake[i].x
-				snake.y = g.snake[i].y - snake.lenght
+				snake.y = g.snake[i].y - snake.length
 			}
 			g.snake[i].tail = false
 			snake.direction = g.snake[i].direction
+			break
 		}
 	}
 
-	snakeIMG := e.NewImage(snake.lenght, snake.lenght)
-	snakeIMG.Fill(color.RGBA{255, 10, 10, 1})
+	snakeIMG := e.NewImage(snake.length, snake.length)
+	snakeIMG.Fill(color.RGBA{255, 10, 10, 255})
 	snake.image = snakeIMG
 
 	g.snake = append(g.snake, snake)
@@ -176,6 +169,13 @@ func checkIntersection(x1, y1, w1, h1, x2, y2, w2, h2 int) bool {
 }
 
 func (g *Game) Draw(screen *e.Image) {
+	if g.gameover.isover {
+		op := &e.DrawImageOptions{}
+		op.GeoM.Scale(0.7, 0.75)
+		screen.DrawImage(g.gameover.image, op)
+		return
+	}
+
 	for _, block := range g.snake {
 		snakeGeoM := e.GeoM{}
 		snakeGeoM.Translate(float64(block.x), float64(block.y))
@@ -190,67 +190,45 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 	return g.window.Width, g.window.Height
 }
 
-func main() {
-
-	game := &Game{}
-	game.window.Width = 1000
-	game.window.Height = 1000
+func (game *Game) init() {
+	game.window.Width = 1400
+	game.window.Height = 900
+	game.updateInterval = 15 * time.Millisecond
 
 	snake := Snake{}
-	snake.lenght = 20
+	snake.length = 20
 	snake.head = true
 	snake.tail = true
 	snake.x = 60
 	snake.y = 40
 	snake.direction = "right"
 
-
-	// snake2 := Snake{}
-	// snake2.lenght = 20
-	// snake2.head = false
-	// snake2.tail = false
-	// snake2.x = 40
-	// snake2.y = 40
-	// snake2.direction = "right"
-	//
-	// snake3 := Snake{}
-	// snake3.lenght = 20
-	// snake3.head = false
-	// snake3.tail = true
-	// snake3.x = 20
-	// snake3.y = 40
-	// snake3.direction = "right"
-	//
-	// snake4 := Snake{}
-	// snake4.lenght = 20
-	// snake4.head = false
-	// snake4.tail = true
-	// snake4.x = 20
-	// snake4.y = 40
-	// snake4.direction = "right"
-
 	eat := Eat{}
-	eat.lenght = 20
+	eat.length = 20
 	eat.x, eat.y = game.genEat()
 
-	snakeIMG := e.NewImage(snake.lenght, snake.lenght)
-	snakeIMG.Fill(color.RGBA{255, 10, 10, 1})
+	snakeIMG := e.NewImage(snake.length, snake.length)
+	snakeIMG.Fill(color.RGBA{255, 10, 10, 255})
 	snake.image = snakeIMG
-	// snake2.image = snakeIMG
-	// snake3.image = snakeIMG
-	// snake4.image = snakeIMG
 
-	eatIMG := e.NewImage(eat.lenght, eat.lenght)
-	eatIMG.Fill(color.RGBA{67, 39, 245, 1})
+	eatIMG := e.NewImage(eat.length, eat.length)
+	eatIMG.Fill(color.RGBA{67, 39, 245, 255})
 	eat.image = eatIMG
 
-	// snake2.image = snakeIMG
+	var err error
+	game.gameover.image, _, err = eu.NewImageFromFile("./gameover.png")
+	if err != nil {
+		log.Fatalf("cant load gameover iamge: %s", err.Error())
+	}
 
 	game.eat = eat
 	game.snake = append(game.snake, snake)
-	// game.snake = append(game.snake, snake2)
-	// game.snake = append(game.snake, snake3)
-	// game.snake = append(game.snake, snake4)
+}
+
+func main() {
+	game := &Game{}
+
+	game.init()
 
 	e.SetWindowSize(game.window.Width, game.window.Height)
 	e.SetWindowTitle("Your game's title")
